@@ -1,8 +1,14 @@
 #!/usr/bin/python
 
 import json
-import amqp
+from pika import BasicProperties
+from pika.adapters.blocking_connection import BlockingConnection as Connection
+from pika.connection import ConnectionParameters
+from pika.credentials import PlainCredentials
+from pika.channel import Channel
 from socket import gethostname
+from uuid import uuid1 as uuid
+from threading import Thread
 
 class BaseMessage(object):
 	def __init__(self, command = "base"):	
@@ -50,38 +56,58 @@ class MessageFileStatResponse(BaseMessage):
 class Manager:
 	def __init__(self):
 		print "AMQP init"
-		self.connection = amqp.Connection(host = "localhost", userid = "guest", password = "guest");
+		self.connParams = ConnectionParameters(host = "localhost", credentials = PlainCredentials("guest", "guest"));
 
-		self.channel = amqp.Channel(self.connection)
+		self.setupRequestQueue();
+		self.setupResponseQueue();
 
-		result = self.channel.queue_declare(exclusive = True)
-		self.callbackQueue = result.queue
+	def setupRequestQueue(self):
+		self.connectionRequests = Connection(parameters = self.connParams);
+		self.channelRequests = self.connectionRequests.channel();
+		self.channelRequests.queue_declare(queue = "rpc", auto_delete = False, durable = True)
+		self.channelRequests.queue_bind(queue = "rpc", exchange = "ovress", routing_key = "*")
 
-		self.channel.basic_consume(callback = self.onResponse, queue = self.callbackQueue)
-		self.channel.basic_consume(callback = self.onRequest, queue = "rpc")
-		self.channel.wait()
-		print "Consumer configured"
+		Thread(target = self.startConsumeRequests).start()
 
-	def onRequest(self, message):
-		print "request", message
+	def startConsumeRequests(self):
+		self.channelRequests.basic_consume(self.onRequest, queue = "rpc")
+		self.channelRequests.start_consuming()
 
-		self.channel.basic_ask(message);
+	def setupResponseQueue(self):
+		self.connectionResponses = Connection(parameters = self.connParams);
+		self.channelResponses = self.connectionResponses.channel();
 
-	def onResponse(self, thing):
-		print "response", thing
+		self.responseQueue = str('responseQueue-' + str(uuid()))
+		self.channelResponses.queue_declare(exclusive = True, queue = self.responseQueue)
+		
+		Thread(target = self.startConsumeResponses).start();
+
+	def startConsumeResponses(self):
+		self.channelResponses.basic_consume(self.onResponse, queue = self.responseQueue)
+		self.channelResponses.start_consuming()
+
+
+	def onRequest(self, method, props, body):
+		print "request", method, props, body
+
+		self.channelRequests.basic_ask(method.delivery_tag);
+
+	def onResponse(self, method, props, body):
+		print "response", method, props, body
+
+		self.channelRequests.basic_ask(method.delivery_tag);
 
 	def sendHello(self):
 		self.send(MessageHello())
 
-	def send(self, body):
-		if type(body) == str:
-			message = amqp.Message(body = body)
-		else:
-			message = amqp.Message(body = body.toJson())
-			message.reply_to = self.callbackQueue
+	def send(self, baseMessage):
+		properties = BasicProperties(reply_to = self.responseQueue)
 
-		self.channel.basic_publish(message, exchange = "ovress")
+		self.channelRequests.basic_publish("ovress", "route-all-the-things", baseMessage.toJson(), properties = properties)
 
 	def stop(self):
-		self.channel.close()
-		self.connection.close()
+		self.channelRequests.close()
+		self.connectionRequests.close()
+
+		self.channelResponses.close()
+		self.connectionResponses.close()
