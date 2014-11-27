@@ -58,6 +58,10 @@ class Manager:
 		print "AMQP init"
 		self.connParams = ConnectionParameters(host = "localhost", credentials = PlainCredentials("guest", "guest"));
 
+		self.connectionInit = Connection(parameters = self.connParams)
+		self.connectionInit.channel().exchange_declare(exchange = "ovress", type = "fanout", durable = True, auto_delete = False)
+		self.connectionInit.close();
+
 		self.setupRequestQueue();
 		self.setupResponseQueue();
 
@@ -87,15 +91,15 @@ class Manager:
 		self.channelResponses.start_consuming()
 
 
-	def onRequest(self, method, props, body):
-		print "request", method, props, body
+	def onRequest(self, channel, delivery, properties, body):
+		print "request", body
 
-		self.channelRequests.basic_ask(method.delivery_tag);
+		self.channelRequests.basic_ack(delivery.delivery_tag);
 
-	def onResponse(self, method, props, body):
-		print "response", method, props, body
+	def onResponse(self, channel, delivery, properties, body):
+		print "response", body
 
-		self.channelRequests.basic_ask(method.delivery_tag);
+		self.channelRequests.basic_ack(delivery.delivery_tag);
 
 	def sendHello(self):
 		self.send(MessageHello())
