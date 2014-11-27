@@ -68,27 +68,31 @@ class Manager:
 	def setupRequestQueue(self):
 		self.connectionRequests = Connection(parameters = self.connParams);
 		self.channelRequests = self.connectionRequests.channel();
-		self.channelRequests.queue_declare(queue = "rpc", auto_delete = False, durable = True)
-		self.channelRequests.queue_bind(queue = "rpc", exchange = "ovress", routing_key = "*")
+
+		self.requestQueue = str("requests-" + str(uuid()))
+		self.channelRequests.queue_declare(queue = self.requestQueue, exclusive = True, auto_delete = True, durable = False)
+		self.channelRequests.queue_bind(queue = self.requestQueue, exchange = "ovress", routing_key = "*")
 
 		Thread(target = self.startConsumeRequests).start()
 
 	def startConsumeRequests(self):
-		self.channelRequests.basic_consume(self.onRequest, queue = "rpc")
+		self.channelRequests.basic_consume(self.onRequest, queue = self.requestQueue)
 		self.channelRequests.start_consuming()
+		print "stopping requests"
 
 	def setupResponseQueue(self):
 		self.connectionResponses = Connection(parameters = self.connParams);
 		self.channelResponses = self.connectionResponses.channel();
 
-		self.responseQueue = str('responseQueue-' + str(uuid()))
-		self.channelResponses.queue_declare(exclusive = True, queue = self.responseQueue)
+		self.responseQueue = str('responses-' + str(uuid()))
+		self.channelResponses.queue_declare(exclusive = True, queue = self.responseQueue, auto_delete = True, durable = False)
 		
 		Thread(target = self.startConsumeResponses).start();
 
 	def startConsumeResponses(self):
 		self.channelResponses.basic_consume(self.onResponse, queue = self.responseQueue)
 		self.channelResponses.start_consuming()
+		print "stopping responses"
 
 
 	def onRequest(self, channel, delivery, properties, body):
