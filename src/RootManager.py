@@ -6,3 +6,11 @@ class RootManager():
 	
 	def getRoots(self):
 		return self.roots
+
+        def find(self, path):
+            for root in self.roots:
+                if root.path == path:
+                    return root
+
+            return None
+
