@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import json
+import simplejson as json
 from pika import BasicProperties
 from pika.adapters.blocking_connection import BlockingConnection as Connection
 from pika.connection import ConnectionParameters

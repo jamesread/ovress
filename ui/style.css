@@ -1,0 +1,28 @@
+body {
+	font-family: sans-serif;
+}
+
+a.disabled {
+	color: lightgray !important;
+}
+
+a {
+	margin-right: 1em;
+}
+
+table, td {
+	border: 1 solid black;
+}
+
+tr:hover td {
+	background-color: beige;
+}
+
+header {
+	background-color: #dee3e7;
+	padding: .2em;
+}
+
+th {
+	text-align: left;
+}

@@ -14,3 +14,6 @@ class RootManager():
 
             return None
 
+        def count(self):
+            return len(self.roots)
+
