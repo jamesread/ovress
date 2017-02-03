@@ -73,7 +73,7 @@ class Manager:
 		self.channelRequests.queue_declare(queue = self.requestQueue, exclusive = True, auto_delete = True, durable = False)
 		self.channelRequests.queue_bind(queue = self.requestQueue, exchange = "ovress", routing_key = "*")
 
-		Thread(target = self.startConsumeRequests).start()
+		Thread(target = self.startConsumeRequests, name = "amqpReqQ").start()
 
 	def startConsumeRequests(self):
 		self.channelRequests.basic_consume(self.onRequest, queue = self.requestQueue)
@@ -87,7 +87,7 @@ class Manager:
 		self.responseQueue = str('responses-' + str(uuid()))
 		self.channelResponses.queue_declare(exclusive = True, queue = self.responseQueue, auto_delete = True, durable = False)
 		
-		Thread(target = self.startConsumeResponses).start();
+		Thread(target = self.startConsumeResponses, name = "amqpRespQ").start();
 
 	def startConsumeResponses(self):
 		self.channelResponses.basic_consume(self.onResponse, queue = self.responseQueue)

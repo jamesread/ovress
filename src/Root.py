@@ -8,156 +8,171 @@ from pyinotify import WatchManager, Notifier, ThreadedNotifier, EventsCodes, Pro
 from threading import Thread
 from Peer import Peer
 from time import time, sleep
+from Config import Config
 
 class Root(ProcessEvent):
-        scanThread = None
-        continueScanning = True
-        peers = []
+    watchThread = None
+    notifier = None
 
-	def __init__(self, path):
-		self.path = path;
-                self.setStatus("???")
+    scanThread = None
+    continueScanning = True
+    peers = []
 
-                self.peers.append(Peer("dummy", self.path))
+    def __init__(self, path):
+        self.path = path;
+        self.setStatus("???")
+
+        self.peers.append(Peer("dummy", self.path))
                
-		self.watchManager = WatchManager()
+        self.watchManager = WatchManager()
 
-		self.watchMask = EventsCodes.ALL_FLAGS['IN_DELETE'] | EventsCodes.ALL_FLAGS['IN_CREATE']
+        self.watchMask = EventsCodes.ALL_FLAGS['IN_DELETE'] | EventsCodes.ALL_FLAGS['IN_CREATE']
+                 
+        self.contents = {}
+        self.load()  
 
-		self.notifier = ThreadedNotifier(self.watchManager, default_proc_fun=self)
-		self.notifier.start()
+        self.startWatching()
+        self.startRescan()
 
-		self.wdd = self.watchManager.add_watch(path, self.watchMask, rec=True)
-                
-                self.contents = {}
-                self.load()  
+        self.save()
 
-                self.rescan()
-                self.save()
+    def setStatus(self, msg):
+        print "root: " + self.path + " status: " + msg
+        self.status = msg;
 
-        def setStatus(self, msg):
-            print "root: " + self.path + " status: " + msg
-            self.status = msg;
+    def save(self):
+        print "Saving to: ", self.getContentsFilepath()
+        try:
+            handle = file(self.getContentsFilepath(), 'w+')
+            handle.write(json.dumps(self.contents, sort_keys=True, indent=4))
+            handle.close()
+        except Exception as e:
+            print e
 
-        def save(self):
-                print "Saving to: ", self.getContentsFilepath()
-                try:
-                    handle = file(self.getContentsFilepath(), 'w+')
-                    handle.write(json.dumps(self.contents, sort_keys=True, indent=4))
-                    handle.close()
-                except Exception as e:
-                    print e
+        return self.getContentsFilepath()
 
-                return self.getContentsFilepath()
+    def load(self):
+        try: 
+            handle = file(self.getContentsFilepath(), 'r')
+            jsonRaw = handle.read()
+            jsonContents = json.loads(jsonRaw)
 
-        def load(self):
+            print jsonContents
+        except Exception as e:
+            print "Load failed:" + str(e)
+            return
+
+        self.contents = jsonContents
+
+    def getContentsFilepath(self):
+        contentsDir = os.path.join(os.path.join(self.path, ".ovress"))
+
+        if not os.path.isdir(contentsDir):
+            os.mkdir(contentsDir)
+
+        return os.path.join(contentsDir, "contents.json")
+
+    def startWatching(self):
+        if self.watchThread == None or not self.watchThread.is_alive():
+            self.watchThread = Thread(target = self.doWatch, name = "watchThread")
+            self.watchThread.start()
+
+    def doWatch(self):
+        print("watching path: " + str(self.path));
+        self.wdd = self.watchManager.add_watch(self.path, self.watchMask, rec=True)
+
+        self.notifier = ThreadedNotifier(self.watchManager, default_proc_fun=self)
+        self.notifier.start()
+
+    def startRescan(self):
+        if self.scanThread == None or not self.scanThread.is_alive():
+            self.scanThread = Thread(target = self.doScan, name = "scanThread")
+            self.scanThread.start()
+
+    def doScan(self):
+        countNew = 0
+        self.setStatus("scanning")
+
+        for dirname, subdirs, fileList in os.walk(self.path):
+            for filename in fileList:
+                absolutePath = os.path.join(dirname, filename)
+                relativePath = absolutePath.replace(self.path, "")
+
+                generateMetadata = True
+
                 try: 
-                    handle = file(self.getContentsFilepath(), 'r')
-                    jsonRaw = handle.read()
-                    jsonContents = json.loads(jsonRaw)
+                    fileMetadata = self.contents[relativePath]
+                    
+                    if (fileMetadata['refreshed'] + 3600) > time():
+                        self.setStatus("Using cached scan of: " + relativePath)
+                        generateMetadata = False
+                except KeyError:
+                        pass
 
-                    print jsonContents
-                except Exception as e:
-                    print "Load failed:" + str(e)
-                    return
+                if generateMetadata:
+                    self.setStatus("Generating Metadata: " + absolutePath)
 
-                self.contents = jsonContents
+                    fileMetadata = self.getFileMetadata(absolutePath)
+                    self.contents[relativePath] = fileMetadata
 
-        def getContentsFilepath(self):
-                contentsDir = os.path.join(os.path.join(self.path, ".ovress"))
+                    countNew = countNew + 1
+                    sleep(0.1)
 
-                if not os.path.isdir(contentsDir):
-                    os.mkdir(contentsDir)
+                if countNew == Config.instance.saveInterval:
+                    countNew = 0
+                    self.save()
 
-                return os.path.join(contentsDir, "contents.json")
+                for peer in self.peers:
+                        peer.onScanFile(relativePath, fileMetadata)
 
-        def rescan(self):
-                if self.scanThread == None or not self.scanThread.is_alive():
-                    self.scanThread = Thread(target = self.doScan, name = "scanThread")
-                    self.scanThread.start()
+                if not self.continueScanning: return
 
-        def doScan(self):
-                countNew = 0
-                self.setStatus("scanning")
+        self.setStatus("complete")
 
-                for dirname, subdirs, fileList in os.walk(self.path):
-                    for filename in fileList:
-                        absolutePath = os.path.join(dirname, filename)
-                        relativePath = absolutePath.replace(self.path, "")
+    def getFileMetadata(self, path):
+        exists = False;
+        filesize = 0;
+        filetype = '?';
+        md5sum = ""
 
-                        generateMetadata = True
+        if os.path.exists(path):
+            exists = True
+            filesize = os.path.getsize(path)
+            md5sum = md5.md5(path).hexdigest()
 
-                        try: 
-                            fileMetadata = self.contents[relativePath]
-                            
-                            if (fileMetadata['refreshed'] + 3600) > time():
-                                self.setStatus("Using cached scan of: " + relativePath)
-                                generateMetadata = False
-                        except KeyError:
-                                pass
+        return {
+            "exists": exists,
+            "filesize": filesize,
+            "type": filetype,
+            "md5": md5sum,
+            "refreshed": time()
+        }
 
-                        if generateMetadata:
-                            self.setStatus("Generating Metadata: " + absolutePath)
+    def getContents(self):
+        return self.contents
 
-                            fileMetadata = self.getFileMetadata(absolutePath)
-                            self.contents[relativePath] = fileMetadata
+    def process_IN_CREATE(self, event):
+        fullPath = os.path.join(event.path, event.name)
 
-                            countNew = countNew + 1
-                            sleep(0.5)
+        print "Create %s" % fullPath
 
-                        if countNew == config.saveInterval:
-                            countNew = 0
-                            self.save()
+        self.contents[fullPath] = self.getFileMetadata(fullPath)
 
-                        for peer in self.peers:
-                                peer.onScanFile(relativePath, fileMetadata)
+    def process_IN_DELETE(self, event):
+        fullPath = os.path.join(event.path, event.name)
 
-                        if not self.continueScanning: return
+        print "Delete %s" % fullPath
 
-                self.setStatus("complete")
+        self.contents[fullPath] = self.getFileMetadata(fullPath)
 
-        def getFileMetadata(self, path):
-                exists = False;
-                filesize = 0;
-                filetype = '?';
-                md5sum = ""
+    def stop(self):
+        self.continueScanning = False
 
-                if os.path.exists(path):
-                    exists = True
-                    filesize = os.path.getsize(path)
-                    md5sum = md5.md5(path).hexdigest()
+        if self.notifier is not None:
+            self.notifier.stop();
 
-                return {
-                    "exists": exists,
-                    "filesize": filesize,
-                    "type": filetype,
-                    "md5": md5sum,
-                    "refreshed": time()
-                }
+    def getPeers(self):
+        return self.peers
 
-        def getContents(self):
-                return self.contents
-
-	def process_IN_CREATE(self, event):
-                fullPath = os.path.join(event.path, event.name)
-
-		print "Create %s" % fullPath
-
-                self.contents[fullPath] = self.getFileMetadata(fullPath)
-
-	def process_IN_DELETE(self, event):
-                fullPath = os.path.join(event.path, event.name)
-
-		print "Delete %s" % fullPath
-
-                self.contents[fullPath] = self.getFileMetadata(fullPath)
-
-	def stop(self):
-                self.continueScanning = False
-		self.notifier.stop();
-
-        def getPeers(self):
-                return self.peers
-
-	def to_JSON(self):
-		return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)
+    def to_JSON(self):
+        return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)

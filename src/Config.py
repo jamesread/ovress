@@ -1,25 +1,27 @@
 import ConfigParser
 import os
-from Root import Root
 
 class Config:
+    instance = None
+
     bindAddress = "0.0.0.0"
-    rootManager = None
     saveInterval = 10
 
-    def __init__(self, rootManager):
+    def __init__(self):
         self.configParser = ConfigParser.SafeConfigParser()
 
-        self.rootManager = rootManager
+    def __getattr__(self, name):
+        return getattr(self.instance, name);
 
-        self.reloadUserConfig();
+    def reloadUserConfig(self, rootManager):
+        from Root import Root
 
-    def reloadUserConfig(self):
         homePath = os.path.join(os.getenv('HOME'), '.ovress.cfg')
 
         try: 
             res = self.configParser.readfp(open(homePath))
-        except: 
+        except Exception as e: 
+            print "config fail", e
             return
 
         for section in self.configParser.sections():
@@ -31,6 +33,6 @@ class Config:
                 if self.configParser.has_option(section, "path"):
                     path = self.configParser.get(section, "path")
 
-                    self.rootManager.roots.append(Root(path))
+                    rootManager.roots.append(Root(path))
 
 

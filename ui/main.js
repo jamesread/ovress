@@ -11,6 +11,12 @@ function reqListRoots() {
 	newContentJson('/listRoots', resListRoots)
 }
 
+function promptRegisterRoot() {
+	root = window.prompt("path?");
+
+	$.getJSON("/registerRoot?path=" + root);
+}
+
 function resListRoots(json) {
 	content = newContent();
 	console.log(json)
@@ -51,6 +57,7 @@ function Header() {
 
 	dom = $('<header/>').appendTo('body');
 	linkListRoots = $('<a id = "listRoots" href = "#listRoots">Roots</a>').click(reqListRoots).appendTo(dom);
+	linkRegisterRoot = $('<a id = "registerRoot" href = "#registerRoot">Register</a>').click(promptRegisterRoot).appendTo(dom);
 
 	return self;
 }

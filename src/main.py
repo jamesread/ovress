@@ -8,10 +8,8 @@ import simplejson as json
 from sys import exc_info
 import os
 import os.path
-import Config
+from Config import Config
 from Api import Api
-
-JSON_OK = { "message": "ok"}
 
 import argparse
 parser = argparse.ArgumentParser();
@@ -42,7 +40,8 @@ def error_handler():
 	print exceptionInfo
 		
 api = Api();
-config = Config.Config(api.rootManager)
+Config.instance = Config()
+Config.instance.reloadUserConfig(api.rootManager)
 
 uidir = os.path.realpath(os.path.dirname(__file__) + '/../ui/')
 print uidir
