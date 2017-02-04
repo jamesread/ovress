@@ -9,6 +9,7 @@ from threading import Thread
 from Peer import Peer
 from time import time, sleep
 from Config import Config
+import datetime
 
 class Root(ProcessEvent):
     watchThread = None
@@ -57,7 +58,7 @@ class Root(ProcessEvent):
             jsonRaw = handle.read()
             jsonContents = json.loads(jsonRaw)
 
-            print jsonContents
+            print "Contents of json load:" + str(len(jsonContents)) + " items"
         except Exception as e:
             print "Load failed:" + str(e)
             return
@@ -90,6 +91,9 @@ class Root(ProcessEvent):
             self.scanThread.start()
 
     def doScan(self):
+        dateStarted = datetime.datetime.now()
+        countCached = 0
+        countScanned = 0
         countNew = 0
         self.setStatus("scanning")
 
@@ -110,17 +114,19 @@ class Root(ProcessEvent):
                         pass
 
                 if generateMetadata:
-                    self.setStatus("Generating Metadata: " + absolutePath)
-
                     fileMetadata = self.getFileMetadata(absolutePath)
                     self.contents[relativePath] = fileMetadata
 
+                    countScanned = countScanned + 1
                     countNew = countNew + 1
                     sleep(0.1)
 
                 if countNew == Config.instance.saveInterval:
                     countNew = 0
                     self.save()
+
+
+                self.setStatus("Scanned: " + str(countScanned) + ". Cached: " + str(countCached))
 
                 for peer in self.peers:
                         peer.onScanFile(relativePath, fileMetadata)
@@ -170,6 +176,8 @@ class Root(ProcessEvent):
 
         if self.notifier is not None:
             self.notifier.stop();
+
+        self.setStatus("Stopped");
 
     def getPeers(self):
         return self.peers

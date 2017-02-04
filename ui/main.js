@@ -37,6 +37,7 @@ function resListRoots(json) {
 		actionsCell = row.find('td.actions')
 		actionsCell.append($('<a />').text("X").attr('href', 'removeRoot?path=' + root.path))
 		actionsCell.append($('<a />').text("Rescan").attr('href', 'rescan?path=' + root.path))
+		actionsCell.append($('<a />').text("Stop").attr('href', 'stopRescan?path=' + root.path))
 		actionsCell.append($('<a />').text("Contents").attr('href', 'listRootContents?path=' + root.path))
 		tbody.append(row)
 	});

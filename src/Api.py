@@ -60,6 +60,17 @@ class Api:
             return self.outputJsonOk()
 
     @cherrypy.expose
+    def stopRescan(self, *path, **args):
+        root = self.rootManager.find(args['path'])
+
+        if root == None:
+            return self.outputErrorPathNotFound()
+
+        root.stop();
+
+        return self.outputJsonOk()
+
+    @cherrypy.expose
     def registerRoot(self, *path, **args):
         path = args['path']
 

@@ -16,7 +16,7 @@ parser = argparse.ArgumentParser();
 parser.add_argument('--port', default = 9010, type = int)
 parser.add_argument('--bind-address', default = '0.0.0.0')
 parser.add_argument('--session-timeout', default = 20160)
-parser.add_argument('-F', '--foreground', action = 'store_true')
+parser.add_argument('-B', '--background', action = 'store_true')
 args = parser.parse_args();
 
 def http_error_handler(status, message, traceback, version):
@@ -58,7 +58,7 @@ cherrypy.config.update({
 	'request.error_page': {'default': http_error_handler }
 })
 
-if not args.foreground:
+if args.background:
 	cherrypy.process.plugins.Daemonizer(cherrypy.engine).subscribe()
 
 cherrypy.quickstart(api);
