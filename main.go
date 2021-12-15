@@ -1,12 +1,9 @@
 package main
 
 import (
-	"github.com/jamesread/ovress/cmd"
-	log "github.com/sirupsen/logrus"
+	"github.com/jamesread/ovress/internal/commands"
 )
 
 func main() {
-	log.Info("ovress")
-
-	cmd.Execute()
+	commands.ExecuteRoot()
 }
