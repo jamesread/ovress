@@ -11,11 +11,11 @@ type OvressFile struct {
 	Name string;
 	IsDir bool;
 	IsSymlink bool;
-	Size int64 `json:",omitempty"`
+	Size int64 `yaml:",omitempty"`
 	Contents map[string]OvressFile;
 	FullDirectory string;
 
-	ParentDir *OvressFile `json:"-"`
+	ParentDir *OvressFile `yaml:"-"`
 }
 
 func (of *OvressFile) Dir() string {
@@ -88,5 +88,4 @@ func ScanRoot(path string) (*PathRoot) {
 
 	return &ret;
 }
-
 
